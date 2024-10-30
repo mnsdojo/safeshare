@@ -1,28 +1,33 @@
 "use client";
-import React from "react";
 
+import React from "react";
 import { Button } from "../ui/button";
 import { MultiFileDropzone } from "../ui/multi-file";
 import type { FileState } from "../ui/multi-file";
-
 import { useEdgeStore } from "@/lib/edgestore";
 import { UploadAbortedError } from "@edgestore/react/errors";
 import { Alert, AlertDescription } from "../ui/alert";
-import { Loader2 } from "lucide-react";
+import { Copy, Link2, Loader2, X } from "lucide-react";
+import { Card, CardContent, CardHeader, CardTitle } from "../ui/card";
+import QRCodeDialog from "./QrCodeDialog";
+
 interface UploadResult {
   url: string;
   filename: string;
 }
+
 interface ShareLinkResponse {
   shareId: string;
   message?: string;
 }
+
 function FileUpload() {
   const [isUploading, setIsUploading] = React.useState(false);
   const [error, setError] = React.useState<string | null>(null);
   const [sharedUrl, setSharedUrl] = React.useState<string>("");
   const [fileStates, setFileStates] = React.useState<FileState[]>([]);
-
+  const [copySuccess, setCopySuccess] = React.useState(false);
+  const [showUploadBox, setShowUploadBox] = React.useState(true);
   const { edgestore } = useEdgeStore();
 
   function updateFileState(key: string, changes: Partial<FileState>) {
@@ -96,12 +101,20 @@ function FileUpload() {
 
         const shareUrl = `${window.location.origin}/share/${data.shareId}`;
         setSharedUrl(shareUrl);
+        setShowUploadBox(false); // Hide the upload box after successful upload
       }
     } catch (err) {
       setError(err instanceof Error ? err.message : "Failed to upload files");
     } finally {
       setIsUploading(false);
     }
+  };
+
+  const handleReset = () => {
+    setFileStates([]);
+    setSharedUrl("");
+    setError(null);
+    setShowUploadBox(true);
   };
 
   const pendingUploads = fileStates.filter(
@@ -111,52 +124,95 @@ function FileUpload() {
   const handleCopyShareLink = async () => {
     try {
       await navigator.clipboard.writeText(sharedUrl);
+      setCopySuccess(true);
+      setTimeout(() => setCopySuccess(false), 2000);
     } catch {
       setError("Failed to copy link to clipboard");
     }
   };
 
   return (
-    <div className="flex flex-col items-center">
+    <div className="flex flex-col items-center relative">
       {error && (
-        <Alert variant="destructive" className="w-full">
+        <Alert variant="destructive" className="w-full mb-4">
           <AlertDescription>{error}</AlertDescription>
         </Alert>
       )}
-      <MultiFileDropzone
-        value={fileStates}
-        dropzoneOptions={{
-          maxFiles: 5,
-          maxSize: 1024 * 1024 * 4, // 1 MB
-        }}
-        onChange={setFileStates}
-        onFilesAdded={async (addedFiles) => {
-          setFileStates([...fileStates, ...addedFiles]);
-        }}
-      />
-      <Button
-        onClick={handleUpload}
-        disabled={pendingUploads === 0 || isUploading}
-        className="mt-4"
-      >
-        {isUploading && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
-        {isUploading
-          ? "Uploading..."
-          : `Upload ${pendingUploads} file${pendingUploads !== 1 ? "s" : ""}`}
-      </Button>
+
+      {showUploadBox && (
+        <div className="w-full relative">
+          <MultiFileDropzone
+            value={fileStates}
+            dropzoneOptions={{
+              maxFiles: 5,
+              maxSize: 1024 * 1024 * 4,
+            }}
+            onChange={setFileStates}
+            onFilesAdded={async (addedFiles) => {
+              setFileStates([...fileStates, ...addedFiles]);
+            }}
+          />
+          {sharedUrl && (
+            <Button
+              variant="ghost"
+              size="icon"
+              className="absolute -top-2 -right-2 bg-background rounded-full shadow-md hover:bg-muted"
+              onClick={handleReset}
+            >
+              <X className="h-4 w-4" />
+            </Button>
+          )}
+        </div>
+      )}
+
+      {!showUploadBox && (
+        <Button onClick={handleReset} className="mb-4">
+          Upload More Files
+        </Button>
+      )}
+
+      {pendingUploads > 0 && (
+        <Button onClick={handleUpload} disabled={isUploading} className="mt-4">
+          {isUploading && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+          {isUploading
+            ? "Uploading..."
+            : `Upload ${pendingUploads} file${pendingUploads !== 1 ? "s" : ""}`}
+        </Button>
+      )}
 
       {sharedUrl && (
-        <div className="w-full p-4 mt-4 bg-muted rounded-lg flex items-center gap-2">
-          <input
-            type="text"
-            value={sharedUrl}
-            readOnly
-            className="flex-1 bg-transparent border-none focus:outline-none text-sm"
-          />
-          <Button size="sm" onClick={handleCopyShareLink}>
-            Copy
-          </Button>
-        </div>
+        <Card className="w-full mt-6">
+          <CardHeader>
+            <CardTitle className="flex items-center gap-2">
+              <Link2 className="h-5 w-5" />
+              Share Files
+            </CardTitle>
+          </CardHeader>
+          <CardContent className="space-y-4">
+            <div className="flex items-center gap-2 bg-muted p-3 rounded-md">
+              <input
+                type="text"
+                value={sharedUrl}
+                readOnly
+                className="flex-1 bg-transparent border-none focus:outline-none text-sm"
+              />
+              <QRCodeDialog url={sharedUrl} />
+              <Button
+                size="sm"
+                variant="outline"
+                onClick={handleCopyShareLink}
+                className="relative"
+              >
+                <Copy className="h-4 w-4 text-green-500" />
+                {copySuccess && (
+                  <span className="absolute -top-8 left-1/2 bg-black transform -translate-x-1/2 text-green-500 text-xs py-1 px-2 rounded">
+                    Copied!
+                  </span>
+                )}
+              </Button>
+            </div>
+          </CardContent>
+        </Card>
       )}
     </div>
   );

@@ -54,6 +54,9 @@ function FileUpload() {
             updateFileState(fileState.key, { abortController });
 
             const res = await edgestore.publicFiles.upload({
+              options: {
+                temporary: true,
+              },
               file: fileState.file,
               signal: abortController.signal,
               onProgressChange: async (progress) => {
@@ -78,10 +81,10 @@ function FileUpload() {
             }
             return null;
           }
-        })
+        }),
       );
       const successfulUploads = results.filter(
-        (result): result is UploadResult => result !== null
+        (result): result is UploadResult => result !== null,
       );
 
       if (successfulUploads.length > 0) {
@@ -118,7 +121,7 @@ function FileUpload() {
   };
 
   const pendingUploads = fileStates.filter(
-    (fileState) => fileState.progress === "PENDING"
+    (fileState) => fileState.progress === "PENDING",
   ).length;
 
   const handleCopyShareLink = async () => {
